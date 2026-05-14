@@ -4,12 +4,11 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Notice } from "@/lib/types";
 import { getOrgColor } from "@/lib/utils";
+import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
-// 수도권 중심 좌표
 const DEFAULT_CENTER = { lat: 37.5, lng: 127.0 };
 const DEFAULT_ZOOM = 10;
 
-// 기관별 마커 색상
 const ORG_MARKER_COLOR: Record<string, string> = {
   LH: "#4f46e5",
   SH: "#9333ea",
@@ -24,29 +23,20 @@ function MapContent() {
 
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const markersRef = useRef<google.maps.Marker[]>([]);
   const geocoderRef = useRef<google.maps.Geocoder | null>(null);
 
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
 
-  // Google Maps 스크립트 로드
+  // Google Maps 로드
   useEffect(() => {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-    if (!apiKey || document.getElementById("google-maps-script")) {
-      if (window.google?.maps) setMapReady(true);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.id = "google-maps-script";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&v=weekly&language=ko`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => setMapReady(true);
-    document.head.appendChild(script);
+    loadGoogleMaps()
+      .then(() => setMapReady(true))
+      .catch((err) => setMapError(err.message));
   }, []);
 
   // 공고 데이터 로드
@@ -79,7 +69,6 @@ function MapContent() {
     googleMapRef.current = new google.maps.Map(mapRef.current, {
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
-      mapId: "house-alert-map",
       disableDefaultUI: true,
       zoomControl: true,
       gestureHandling: "greedy",
@@ -87,24 +76,29 @@ function MapContent() {
     geocoderRef.current = new google.maps.Geocoder();
   }, [mapReady]);
 
-  // 마커 생성 함수
+  // 마커 생성
   const addMarker = useCallback(
     (notice: Notice, position: google.maps.LatLngLiteral) => {
       if (!googleMapRef.current) return;
 
       const color = ORG_MARKER_COLOR[notice.organization] ?? "#6b7280";
 
-      const pin = new google.maps.marker.PinElement({
-        background: color,
-        borderColor: color,
-        glyphColor: "#fff",
-      });
+      const svgIcon = {
+        url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+            <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.27 21.73 0 14 0z" fill="${color}"/>
+            <circle cx="14" cy="14" r="6" fill="white" opacity="0.9"/>
+          </svg>`
+        )}`,
+        scaledSize: new google.maps.Size(28, 36),
+        anchor: new google.maps.Point(14, 36),
+      };
 
-      const marker = new google.maps.marker.AdvancedMarkerElement({
+      const marker = new google.maps.Marker({
         map: googleMapRef.current,
         position,
         title: notice.title,
-        content: pin.element,
+        icon: svgIcon,
       });
 
       marker.addListener("click", () => {
@@ -117,42 +111,45 @@ function MapContent() {
     []
   );
 
-  // 주소 → 좌표 변환 + 마커 배치
+  // 마커 배치
   useEffect(() => {
-    if (!mapReady || !googleMapRef.current || !geocoderRef.current || loading)
-      return;
+    if (!mapReady || !googleMapRef.current || !geocoderRef.current || loading) return;
 
-    // 기존 마커 제거
-    markersRef.current.forEach((m) => (m.map = null));
+    markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
 
     const withCoords = notices.filter((n) => n.lat && n.lng);
     const withAddress = notices.filter((n) => !n.lat && !n.lng && n.address);
 
-    // 좌표 있는 공고는 바로 마커
-    withCoords.forEach((n) => {
-      addMarker(n, { lat: n.lat!, lng: n.lng! });
+    withCoords.forEach((n) => addMarker(n, { lat: n.lat!, lng: n.lng! }));
+
+    withAddress.slice(0, 10).forEach((n, i) => {
+      setTimeout(() => {
+        geocoderRef.current!.geocode({ address: n.address }, (results, status) => {
+          if (status === "OK" && results?.[0]) {
+            const loc = results[0].geometry.location;
+            addMarker(n, { lat: loc.lat(), lng: loc.lng() });
+          }
+        });
+      }, i * 200);
     });
 
-    // 주소만 있는 공고는 지오코딩 (최대 10개, API 쿼터 보호)
-    withAddress.slice(0, 10).forEach((n) => {
-      geocoderRef.current!.geocode({ address: n.address }, (results, status) => {
-        if (status === "OK" && results?.[0]) {
-          const loc = results[0].geometry.location;
-          addMarker(n, { lat: loc.lat(), lng: loc.lng() });
-        }
-      });
-    });
-
-    // 하이라이트 공고로 포커스
     if (selectedNotice?.lat && selectedNotice?.lng) {
-      googleMapRef.current.panTo({
-        lat: selectedNotice.lat,
-        lng: selectedNotice.lng,
-      });
+      googleMapRef.current.panTo({ lat: selectedNotice.lat, lng: selectedNotice.lng });
       googleMapRef.current.setZoom(14);
     }
   }, [mapReady, notices, loading, selectedNotice, addMarker]);
+
+  if (mapError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center px-6">
+          <p className="text-3xl mb-2">🗺️</p>
+          <p className="text-sm text-gray-500">{mapError}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (loading || !mapReady) {
     return (
@@ -164,46 +161,27 @@ function MapContent() {
 
   return (
     <div className="flex flex-col h-[calc(100dvh-4rem)]">
-      {/* 지도 영역 */}
       <div ref={mapRef} className="flex-1 w-full" />
-
-      {/* 하단 패널 */}
       <div className="bg-white border-t max-h-[40%] overflow-y-auto">
-        {/* 선택된 공고 */}
         {selectedNotice && (
           <div className="bg-blue-50 border-b border-blue-200 p-3">
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <span
-                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getOrgColor(selectedNotice.organization)}`}
-                  >
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getOrgColor(selectedNotice.organization)}`}>
                     {selectedNotice.organization}
                   </span>
-                  <span className="text-[10px] text-gray-400">
-                    {selectedNotice.region}
-                  </span>
+                  <span className="text-[10px] text-gray-400">{selectedNotice.region}</span>
                 </div>
-                <p className="text-sm font-bold text-gray-900 line-clamp-2">
-                  {selectedNotice.title}
-                </p>
+                <p className="text-sm font-bold text-gray-900 line-clamp-2">{selectedNotice.title}</p>
                 {selectedNotice.address && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    📍 {selectedNotice.address}
-                  </p>
+                  <p className="text-xs text-gray-500 mt-1">📍 {selectedNotice.address}</p>
                 )}
               </div>
-              <button
-                onClick={() => setSelectedNotice(null)}
-                className="ml-2 text-gray-400 text-lg"
-              >
-                ✕
-              </button>
+              <button onClick={() => setSelectedNotice(null)} className="ml-2 text-gray-400 text-lg">✕</button>
             </div>
           </div>
         )}
-
-        {/* 공고 목록 */}
         <div className="divide-y divide-gray-50">
           {notices
             .filter((n) => n.address || (n.lat && n.lng))
@@ -217,22 +195,14 @@ function MapContent() {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getOrgColor(notice.organization)}`}
-                    >
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getOrgColor(notice.organization)}`}>
                       {notice.organization}
                     </span>
-                    <span className="text-[10px] text-gray-400">
-                      {notice.region}
-                    </span>
+                    <span className="text-[10px] text-gray-400">{notice.region}</span>
                   </div>
-                  <p className="text-xs font-semibold text-gray-900 truncate">
-                    {notice.title}
-                  </p>
+                  <p className="text-xs font-semibold text-gray-900 truncate">{notice.title}</p>
                   {notice.address && (
-                    <p className="text-[11px] text-gray-400 truncate">
-                      {notice.address}
-                    </p>
+                    <p className="text-[11px] text-gray-400 truncate">{notice.address}</p>
                   )}
                 </div>
                 <span className="shrink-0 text-lg">📍</span>

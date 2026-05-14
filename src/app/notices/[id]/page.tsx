@@ -2,17 +2,15 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Notice, ComplexInfo, UnitTypeInfo, ScheduleInfo, ContactInfo } from "@/lib/types";
+import { Notice, ComplexInfo, ScheduleInfo } from "@/lib/types";
 import {
   formatDate,
   getStatusColor,
   getOrgColor,
   formatMoney,
-  sqmToPyeong,
   calculateDepositConversion,
 } from "@/lib/utils";
-
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? "";
+import { loadGoogleMaps } from "@/lib/google-maps-loader";
 
 export default function NoticeDetailPage() {
   const params = useParams();
@@ -20,25 +18,29 @@ export default function NoticeDetailPage() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [complexes, setComplexes] = useState<ComplexInfo[]>([]);
   const [schedule, setSchedule] = useState<ScheduleInfo>({});
+  const [contactInfo, setContactInfo] = useState<Notice["contactInfo"]>(undefined);
   const [loading, setLoading] = useState(true);
   const [expandedComplex, setExpandedComplex] = useState<string | null>(null);
   const [conversionRate, setConversionRate] = useState(2.5);
 
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const markersRef = useRef<google.maps.Marker[]>([]);
+  const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/notices");
-        const data = await res.json();
+        const [listRes, detailRes] = await Promise.all([
+          fetch("/api/notices"),
+          fetch(`/api/notices/${encodeURIComponent(params.id as string)}`),
+        ]);
+        const data = await listRes.json();
         const found = data.notices?.find(
           (n: Notice) => n.id === decodeURIComponent(params.id as string)
         );
         setNotice(found ?? null);
 
-        const detailRes = await fetch(`/api/notices/${encodeURIComponent(params.id as string)}`);
         if (detailRes.ok) {
           const detailData = await detailRes.json();
           if (detailData.complexes?.length) {
@@ -46,6 +48,7 @@ export default function NoticeDetailPage() {
             setExpandedComplex(detailData.complexes[0]?.id);
           }
           if (detailData.schedule) setSchedule(detailData.schedule);
+          if (detailData.contactInfo) setContactInfo(detailData.contactInfo);
         }
       } catch {
         setNotice(null);
@@ -56,57 +59,43 @@ export default function NoticeDetailPage() {
     load();
   }, [params.id]);
 
-  const initMap = useCallback(() => {
-    if (!mapRef.current || googleMapRef.current || !window.google?.maps) return;
+  // 지도 로드 — 공유 로더 사용
+  useEffect(() => {
+    loadGoogleMaps()
+      .then(() => setMapReady(true))
+      .catch(() => {});
+  }, []);
+
+  // 지도 초기화
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || googleMapRef.current) return;
     googleMapRef.current = new google.maps.Map(mapRef.current, {
       center: { lat: 37.5665, lng: 126.978 },
       zoom: 12,
-      mapId: "detail-map",
       disableDefaultUI: true,
       zoomControl: true,
     });
-  }, []);
-
-  useEffect(() => {
-    if (window.google?.maps) {
-      initMap();
-    } else {
-      const existing = document.querySelector('script[src*="maps.googleapis.com"]');
-      if (existing) {
-        existing.addEventListener("load", initMap);
-      } else {
-        const s = document.createElement("script");
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=marker&v=weekly`;
-        s.async = true;
-        s.onload = initMap;
-        document.head.appendChild(s);
-      }
-    }
-  }, [initMap]);
+  }, [mapReady]);
 
   const moveMapToComplex = useCallback((complex: ComplexInfo) => {
     const map = googleMapRef.current;
     if (!map) return;
 
-    markersRef.current.forEach((m) => (m.map = null));
+    markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
 
     const geocoder = new google.maps.Geocoder();
-    const query = complex.address || complex.name;
-
-    geocoder.geocode({ address: query }, (results, status) => {
+    geocoder.geocode({ address: complex.address || complex.name }, (results, status) => {
       if (status === "OK" && results?.[0]) {
         const loc = results[0].geometry.location;
         map.setCenter(loc);
         map.setZoom(15);
 
-        const pinEl = document.createElement("div");
-        pinEl.innerHTML = `<div style="background:#4F46E5;color:white;padding:6px 12px;border-radius:12px;font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.3)">${complex.name}</div>`;
-
-        const marker = new google.maps.marker.AdvancedMarkerElement({
+        const marker = new google.maps.Marker({
           position: loc,
           map,
-          content: pinEl,
+          title: complex.name,
+          label: { text: complex.name.charAt(0), color: "white", fontWeight: "bold" },
         });
         markersRef.current.push(marker);
       }
@@ -114,15 +103,15 @@ export default function NoticeDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (expandedComplex && googleMapRef.current) {
+    if (expandedComplex && mapReady && googleMapRef.current) {
       const complex = complexes.find((c) => c.id === expandedComplex);
       if (complex) moveMapToComplex(complex);
     }
-  }, [expandedComplex, complexes, moveMapToComplex]);
+  }, [expandedComplex, complexes, moveMapToComplex, mapReady]);
 
-  // 공고 주소로 초기 지도 위치
+  // 공고 주소로 초기 지도 위치 (단지 정보 없을 때)
   useEffect(() => {
-    if (notice?.address && googleMapRef.current && complexes.length === 0) {
+    if (notice?.address && mapReady && googleMapRef.current && complexes.length === 0) {
       const geocoder = new google.maps.Geocoder();
       geocoder.geocode({ address: notice.address }, (results, status) => {
         if (status === "OK" && results?.[0]) {
@@ -408,18 +397,21 @@ export default function NoticeDetailPage() {
         </Section>
 
         {/* 접수처 정보 */}
-        {notice.contactInfo && (
-          <Section title="📞 접수처 정보">
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-              <table className="w-full text-xs">
-                <tbody>
-                  {notice.contactInfo.phone && <ScheduleRow label="전화번호" value={notice.contactInfo.phone} />}
-                  {notice.contactInfo.address && <ScheduleRow label="접수처 주소" value={notice.contactInfo.address} />}
-                </tbody>
-              </table>
-            </div>
-          </Section>
-        )}
+        {(contactInfo || notice.contactInfo) && (() => {
+          const ci = contactInfo ?? notice.contactInfo!;
+          return (
+            <Section title="📞 접수처 정보">
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {ci.phone && <ScheduleRow label="전화번호" value={ci.phone} />}
+                    {ci.address && <ScheduleRow label="접수처 주소" value={ci.address} />}
+                  </tbody>
+                </table>
+              </div>
+            </Section>
+          );
+        })()}
 
         {/* 기본 정보 */}
         <Section title="ℹ️ 기본정보">

@@ -3,6 +3,7 @@ import { fetchLHNotices } from "@/lib/api/lh";
 import { fetchIHNotices } from "@/lib/api/ih";
 import { fetchMyHomeNotices } from "@/lib/api/myhome";
 import { fetchSHNotices } from "@/lib/api/sh";
+import { DUMMY_NOTICES } from "@/lib/dummy-data";
 import { Notice } from "@/lib/types";
 
 export const revalidate = 1800; // 30분 ISR
@@ -10,31 +11,28 @@ export const revalidate = 1800; // 30분 ISR
 export async function GET() {
   const apiKey = process.env.DATA_GO_KR_API_KEY ?? "";
 
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "API key not configured" },
-      { status: 500 }
-    );
-  }
-
-  const results = await Promise.allSettled([
-    fetchLHNotices(apiKey),
-    fetchIHNotices(apiKey),
-    fetchMyHomeNotices(apiKey),
-    fetchSHNotices(apiKey),
-  ]);
-
-  const notices: Notice[] = [];
+  const notices: Notice[] = [...DUMMY_NOTICES];
   const errors: string[] = [];
 
-  results.forEach((r, i) => {
-    const names = ["LH", "iH", "마이홈", "SH"];
-    if (r.status === "fulfilled") {
-      notices.push(...r.value);
-    } else {
-      errors.push(`${names[i]}: ${r.reason?.message ?? "unknown error"}`);
-    }
-  });
+  if (apiKey) {
+    const results = await Promise.allSettled([
+      fetchLHNotices(apiKey),
+      fetchIHNotices(apiKey),
+      fetchMyHomeNotices(apiKey),
+      fetchSHNotices(apiKey),
+    ]);
+
+    results.forEach((r, i) => {
+      const names = ["LH", "iH", "마이홈", "SH"];
+      if (r.status === "fulfilled") {
+        notices.push(...r.value);
+      } else {
+        errors.push(`${names[i]}: ${r.reason?.message ?? "unknown error"}`);
+      }
+    });
+  } else {
+    errors.push("API key not configured — showing dummy data only");
+  }
 
   // 중복 제거 (제목 + 기관 기준)
   const seen = new Set<string>();
