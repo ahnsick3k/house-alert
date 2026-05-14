@@ -53,12 +53,8 @@ export function getTypeLabel(type: NoticeType): string {
   return type;
 }
 
-export function getNaverMapUrl(lat: number, lng: number, name: string): string {
-  return `https://map.naver.com/v5/search/${encodeURIComponent(name)}?c=${lng},${lat},15,0,0,0,dh`;
-}
-
-export function getKakaoMapUrl(lat: number, lng: number, name: string): string {
-  return `https://map.kakao.com/link/map/${encodeURIComponent(name)},${lat},${lng}`;
+export function getGoogleMapUrl(lat: number, lng: number, name: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${encodeURIComponent(name)}`;
 }
 
 export function filterNotices(

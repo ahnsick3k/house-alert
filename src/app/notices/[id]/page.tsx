@@ -7,8 +7,7 @@ import {
   formatDate,
   getStatusColor,
   getOrgColor,
-  getNaverMapUrl,
-  getKakaoMapUrl,
+  getGoogleMapUrl,
 } from "@/lib/utils";
 
 export default function NoticeDetailPage() {
@@ -123,26 +122,14 @@ export default function NoticeDetailPage() {
               <a
                 href={
                   hasCoords
-                    ? getNaverMapUrl(notice.lat!, notice.lng!, notice.title)
-                    : `https://map.naver.com/v5/search/${encodeURIComponent(notice.address || notice.title)}`
+                    ? getGoogleMapUrl(notice.lat!, notice.lng!, notice.title)
+                    : `https://www.google.com/maps/search/${encodeURIComponent(notice.address || notice.title)}`
                 }
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 text-center py-2.5 bg-green-500 text-white text-sm font-medium rounded-xl hover:bg-green-600 transition-colors"
+                className="flex-1 text-center py-2.5 bg-blue-500 text-white text-sm font-medium rounded-xl hover:bg-blue-600 transition-colors"
               >
-                네이버 지도
-              </a>
-              <a
-                href={
-                  hasCoords
-                    ? getKakaoMapUrl(notice.lat!, notice.lng!, notice.title)
-                    : `https://map.kakao.com/link/search/${encodeURIComponent(notice.address || notice.title)}`
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-1 text-center py-2.5 bg-yellow-400 text-yellow-900 text-sm font-medium rounded-xl hover:bg-yellow-500 transition-colors"
-              >
-                카카오 지도
+                Google 지도
               </a>
             </div>
           </div>

@@ -1,17 +1,55 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Notice } from "@/lib/types";
 import { getOrgColor } from "@/lib/utils";
 
+// 수도권 중심 좌표
+const DEFAULT_CENTER = { lat: 37.5, lng: 127.0 };
+const DEFAULT_ZOOM = 10;
+
+// 기관별 마커 색상
+const ORG_MARKER_COLOR: Record<string, string> = {
+  LH: "#4f46e5",
+  SH: "#9333ea",
+  iH: "#14b8a6",
+  GH: "#f97316",
+  기타: "#6b7280",
+};
+
 function MapContent() {
   const searchParams = useSearchParams();
   const highlightId = searchParams.get("id");
+
+  const mapRef = useRef<HTMLDivElement>(null);
+  const googleMapRef = useRef<google.maps.Map | null>(null);
+  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
+
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mapReady, setMapReady] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
 
+  // Google Maps 스크립트 로드
+  useEffect(() => {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey || document.getElementById("google-maps-script")) {
+      if (window.google?.maps) setMapReady(true);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.id = "google-maps-script";
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=marker&v=weekly&language=ko`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => setMapReady(true);
+    document.head.appendChild(script);
+  }, []);
+
+  // 공고 데이터 로드
   useEffect(() => {
     async function load() {
       try {
@@ -34,13 +72,89 @@ function MapContent() {
     load();
   }, [highlightId]);
 
-  // 주소 기반 지도 검색 링크
-  const getMapSearchUrl = (notice: Notice) => {
-    const query = notice.address || notice.title;
-    return `https://map.naver.com/v5/search/${encodeURIComponent(query)}`;
-  };
+  // 지도 초기화
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || googleMapRef.current) return;
 
-  if (loading) {
+    googleMapRef.current = new google.maps.Map(mapRef.current, {
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      mapId: "house-alert-map",
+      disableDefaultUI: true,
+      zoomControl: true,
+      gestureHandling: "greedy",
+    });
+    geocoderRef.current = new google.maps.Geocoder();
+  }, [mapReady]);
+
+  // 마커 생성 함수
+  const addMarker = useCallback(
+    (notice: Notice, position: google.maps.LatLngLiteral) => {
+      if (!googleMapRef.current) return;
+
+      const color = ORG_MARKER_COLOR[notice.organization] ?? "#6b7280";
+
+      const pin = new google.maps.marker.PinElement({
+        background: color,
+        borderColor: color,
+        glyphColor: "#fff",
+      });
+
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map: googleMapRef.current,
+        position,
+        title: notice.title,
+        content: pin.element,
+      });
+
+      marker.addListener("click", () => {
+        setSelectedNotice(notice);
+        googleMapRef.current?.panTo(position);
+      });
+
+      markersRef.current.push(marker);
+    },
+    []
+  );
+
+  // 주소 → 좌표 변환 + 마커 배치
+  useEffect(() => {
+    if (!mapReady || !googleMapRef.current || !geocoderRef.current || loading)
+      return;
+
+    // 기존 마커 제거
+    markersRef.current.forEach((m) => (m.map = null));
+    markersRef.current = [];
+
+    const withCoords = notices.filter((n) => n.lat && n.lng);
+    const withAddress = notices.filter((n) => !n.lat && !n.lng && n.address);
+
+    // 좌표 있는 공고는 바로 마커
+    withCoords.forEach((n) => {
+      addMarker(n, { lat: n.lat!, lng: n.lng! });
+    });
+
+    // 주소만 있는 공고는 지오코딩 (최대 10개, API 쿼터 보호)
+    withAddress.slice(0, 10).forEach((n) => {
+      geocoderRef.current!.geocode({ address: n.address }, (results, status) => {
+        if (status === "OK" && results?.[0]) {
+          const loc = results[0].geometry.location;
+          addMarker(n, { lat: loc.lat(), lng: loc.lng() });
+        }
+      });
+    });
+
+    // 하이라이트 공고로 포커스
+    if (selectedNotice?.lat && selectedNotice?.lng) {
+      googleMapRef.current.panTo({
+        lat: selectedNotice.lat,
+        lng: selectedNotice.lng,
+      });
+      googleMapRef.current.setZoom(14);
+    }
+  }, [mapReady, notices, loading, selectedNotice, addMarker]);
+
+  if (loading || !mapReady) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -48,90 +162,83 @@ function MapContent() {
     );
   }
 
-  const withAddress = notices.filter((n) => n.address);
-
   return (
-    <div className="max-w-lg mx-auto px-4 pt-4">
-      <header className="mb-4">
-        <h1 className="text-xl font-black tracking-tight">🗺️ 지도</h1>
-        <p className="text-xs text-gray-400">공고 위치를 지도에서 확인하세요</p>
-      </header>
+    <div className="flex flex-col h-[calc(100dvh-4rem)]">
+      {/* 지도 영역 */}
+      <div ref={mapRef} className="flex-1 w-full" />
 
-      {/* 선택된 공고 하이라이트 */}
-      {selectedNotice && (
-        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4">
-          <p className="text-xs text-blue-600 font-medium mb-1">선택된 공고</p>
-          <p className="text-sm font-bold text-gray-900 mb-2">
-            {selectedNotice.title}
-          </p>
-          {selectedNotice.address && (
-            <p className="text-xs text-gray-500 mb-3">
-              📍 {selectedNotice.address}
-            </p>
-          )}
-          <div className="flex gap-2">
-            <a
-              href={getMapSearchUrl(selectedNotice)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 text-center py-2 bg-green-500 text-white text-xs font-medium rounded-xl"
-            >
-              네이버 지도
-            </a>
-            <a
-              href={`https://map.kakao.com/link/search/${encodeURIComponent(selectedNotice.address || selectedNotice.title)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 text-center py-2 bg-yellow-400 text-yellow-900 text-xs font-medium rounded-xl"
-            >
-              카카오 지도
-            </a>
-          </div>
-        </div>
-      )}
-
-      {/* 공고 위치 목록 */}
-      <div className="space-y-2 pb-4">
-        {withAddress.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-4xl mb-3">🗺️</p>
-            <p className="text-sm text-gray-400">위치 정보가 있는 공고가 없습니다</p>
-          </div>
-        ) : (
-          withAddress.map((notice) => (
-            <div
-              key={notice.id}
-              className={`bg-white rounded-xl border p-3 flex items-center gap-3 ${
-                selectedNotice?.id === notice.id
-                  ? "border-blue-400 ring-2 ring-blue-100"
-                  : "border-gray-100"
-              }`}
-            >
+      {/* 하단 패널 */}
+      <div className="bg-white border-t max-h-[40%] overflow-y-auto">
+        {/* 선택된 공고 */}
+        {selectedNotice && (
+          <div className="bg-blue-50 border-b border-blue-200 p-3">
+            <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 mb-1">
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getOrgColor(notice.organization)}`}>
-                    {notice.organization}
+                  <span
+                    className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getOrgColor(selectedNotice.organization)}`}
+                  >
+                    {selectedNotice.organization}
                   </span>
-                  <span className="text-[10px] text-gray-400">{notice.region}</span>
+                  <span className="text-[10px] text-gray-400">
+                    {selectedNotice.region}
+                  </span>
                 </div>
-                <p className="text-xs font-semibold text-gray-900 truncate">
-                  {notice.title}
+                <p className="text-sm font-bold text-gray-900 line-clamp-2">
+                  {selectedNotice.title}
                 </p>
-                <p className="text-[11px] text-gray-400 truncate">
-                  {notice.address}
-                </p>
+                {selectedNotice.address && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    📍 {selectedNotice.address}
+                  </p>
+                )}
               </div>
-              <a
-                href={getMapSearchUrl(notice)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="shrink-0 w-9 h-9 bg-green-50 text-green-600 rounded-lg flex items-center justify-center text-lg hover:bg-green-100"
+              <button
+                onClick={() => setSelectedNotice(null)}
+                className="ml-2 text-gray-400 text-lg"
               >
-                📍
-              </a>
+                ✕
+              </button>
             </div>
-          ))
+          </div>
         )}
+
+        {/* 공고 목록 */}
+        <div className="divide-y divide-gray-50">
+          {notices
+            .filter((n) => n.address || (n.lat && n.lng))
+            .map((notice) => (
+              <button
+                key={notice.id}
+                onClick={() => setSelectedNotice(notice)}
+                className={`w-full text-left p-3 flex items-center gap-3 hover:bg-gray-50 ${
+                  selectedNotice?.id === notice.id ? "bg-blue-50" : ""
+                }`}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span
+                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${getOrgColor(notice.organization)}`}
+                    >
+                      {notice.organization}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {notice.region}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-900 truncate">
+                    {notice.title}
+                  </p>
+                  {notice.address && (
+                    <p className="text-[11px] text-gray-400 truncate">
+                      {notice.address}
+                    </p>
+                  )}
+                </div>
+                <span className="shrink-0 text-lg">📍</span>
+              </button>
+            ))}
+        </div>
       </div>
     </div>
   );
