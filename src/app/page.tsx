@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Notice, Region, NoticeType, Organization } from "@/lib/types";
-import { filterNotices, formatDate, getStatusColor, getOrgColor } from "@/lib/utils";
+import { filterNotices } from "@/lib/utils";
 import GoogleMap from "@/components/GoogleMap";
 import NoticeCard from "@/components/NoticeCard";
 import FilterBar from "@/components/FilterBar";
+import { FunnelIcon, ListBulletIcon, MapIcon } from "@heroicons/react/24/outline";
 
 interface ApiResponse {
   notices: Notice[];
@@ -59,34 +60,35 @@ export default function HomePage() {
       <header className="z-40 bg-white/95 backdrop-blur-lg border-b border-gray-200 px-4 pt-[env(safe-area-inset-top)] pb-2">
         <div className="flex items-center justify-between py-2">
           <div>
-            <h1 className="text-lg font-black tracking-tight">🏠 House Alert</h1>
-            <p className="text-[10px] text-gray-400">수도권 공공주택 공고</p>
+            <h1 className="text-xl font-black tracking-tight">🏠 House Alert</h1>
+            <p className="text-xs text-gray-400">수도권 공공주택 공고</p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`relative px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+              className={`relative min-w-[40px] min-h-[40px] px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1 ${
                 showFilters || activeFilterCount > 0
                   ? "bg-blue-600 text-white"
                   : "bg-gray-100 text-gray-600"
               }`}
             >
+              <FunnelIcon className="w-5 h-5" />
               필터
               {activeFilterCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
                   {activeFilterCount}
                 </span>
               )}
             </button>
             <button
               onClick={() => setShowList(!showList)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+              className={`min-w-[40px] min-h-[40px] px-3 py-2 rounded-xl text-sm font-medium transition-colors flex items-center gap-1 ${
                 showList
                   ? "bg-gray-900 text-white"
                   : "bg-gray-100 text-gray-600"
               }`}
             >
-              {showList ? "지도" : "목록"}
+              {showList ? <><MapIcon className="w-5 h-5" />지도</> : <><ListBulletIcon className="w-5 h-5" />목록</>}
             </button>
           </div>
         </div>
@@ -109,12 +111,12 @@ export default function HomePage() {
         {/* 공고 수 표시 */}
         {!loading && data && (
           <div className="flex items-center justify-between pb-1">
-            <p className="text-[11px] text-gray-400">
+            <p className="text-sm text-gray-400">
               총 <span className="font-bold text-gray-700">{filtered.length}</span>건
               {activeFilterCount > 0 && ` (전체 ${data.total}건)`}
             </p>
             {data.errors && data.errors.length > 0 && (
-              <p className="text-[10px] text-orange-500">⚠️ 일부 API 오류</p>
+              <p className="text-xs text-orange-500">⚠️ 일부 API 오류</p>
             )}
           </div>
         )}

@@ -11,6 +11,7 @@ import {
   calculateDepositConversion,
 } from "@/lib/utils";
 import { loadGoogleMaps } from "@/lib/google-maps-loader";
+import { ArrowLeftIcon, ArrowTopRightOnSquareIcon, ChevronDownIcon } from "@heroicons/react/20/solid";
 
 export default function NoticeDetailPage() {
   const params = useParams();
@@ -144,39 +145,39 @@ export default function NoticeDetailPage() {
     <div className="min-h-screen bg-gray-50 pb-8">
       {/* 상단 탭바 */}
       <div className="sticky top-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <button onClick={() => router.back()} className="text-gray-600 hover:text-gray-900 text-sm font-medium">
-          ← 뒤로
+        <button onClick={() => router.back()} className="min-w-[40px] min-h-[40px] flex items-center gap-1 text-gray-600 hover:text-gray-900 text-sm font-medium">
+          <ArrowLeftIcon className="w-5 h-5" /> 뒤로
         </button>
-        <h1 className="text-sm font-semibold truncate mx-4 flex-1 text-center">공고 상세</h1>
+        <h1 className="text-base font-semibold truncate mx-4 flex-1 text-center">공고 상세</h1>
         {notice.detailUrl && (
           <a href={notice.detailUrl} target="_blank" rel="noopener noreferrer"
-            className="text-blue-600 text-sm font-medium whitespace-nowrap">
-            공고문 →
+            className="min-w-[40px] min-h-[40px] flex items-center gap-1 text-blue-600 text-sm font-medium whitespace-nowrap">
+            공고문 <ArrowTopRightOnSquareIcon className="w-4 h-4" />
           </a>
         )}
       </div>
 
       {/* 공고 기본 정보 */}
       <div className="bg-white px-4 py-4 border-b border-gray-100">
-        <div className="flex gap-1.5 flex-wrap mb-2">
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getOrgColor(notice.organization)}`}>
+        <div className="flex gap-2 flex-wrap mb-2">
+          <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getOrgColor(notice.organization)}`}>
             {notice.organization}
           </span>
-          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${getStatusColor(notice.status)}`}>
+          <span className={`text-sm font-semibold px-3 py-1 rounded-full ${getStatusColor(notice.status)}`}>
             {notice.status}
           </span>
-          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">{notice.type}</span>
-          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">{notice.region}</span>
+          <span className="text-sm font-medium px-3 py-1 rounded-full bg-gray-100 text-gray-600">{notice.type}</span>
+          <span className="text-sm font-medium px-3 py-1 rounded-full bg-gray-100 text-gray-600">{notice.region}</span>
         </div>
-        <h2 className="text-base font-bold leading-snug text-gray-900">{notice.title}</h2>
+        <h2 className="text-lg font-bold leading-snug text-gray-900">{notice.title}</h2>
       </div>
 
       {/* 지도 */}
-      <div className="h-48 bg-gray-200">
+      <div className="h-56 bg-gray-200">
         <div ref={mapRef} className="w-full h-full" />
       </div>
 
-      <div className="px-4 py-4 space-y-5">
+      <div className="px-4 py-5 space-y-6">
         {/* 단지 목록 아코디언 */}
         {complexes.length > 0 && (
           <Section title="📍 단지 목록">
@@ -185,24 +186,22 @@ export default function NoticeDetailPage() {
                 <div key={complex.id} className="border border-gray-200 rounded-xl overflow-hidden">
                   <button
                     onClick={() => setExpandedComplex(expandedComplex === complex.id ? null : complex.id)}
-                    className={`w-full px-4 py-3 flex items-center justify-between text-left transition-colors ${
+                    className={`w-full min-h-[48px] px-4 py-3 flex items-center justify-between text-left transition-colors ${
                       expandedComplex === complex.id ? "bg-blue-50" : "bg-white hover:bg-gray-50"
                     }`}
                   >
                     <div>
-                      <p className="text-sm font-bold text-gray-900">{complex.name}</p>
-                      <p className="text-xs text-gray-500">{complex.address}</p>
+                      <p className="text-base font-bold text-gray-900">{complex.name}</p>
+                      <p className="text-sm text-gray-500">{complex.address}</p>
                     </div>
-                    <span className={`text-gray-400 transition-transform ${expandedComplex === complex.id ? "rotate-180" : ""}`}>
-                      ▼
-                    </span>
+                    <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform ${expandedComplex === complex.id ? "rotate-180" : ""}`} />
                   </button>
 
                   {expandedComplex === complex.id && (
                     <div className="border-t border-gray-100 bg-white">
                       {/* 상세스펙 표 */}
                       <div className="overflow-x-auto">
-                        <table className="w-full text-xs">
+                        <table className="w-full text-sm">
                           <thead>
                             <tr className="bg-gray-50 border-b border-gray-200">
                               <th className="px-3 py-2 text-left font-semibold text-gray-600">주택형</th>
@@ -234,8 +233,8 @@ export default function NoticeDetailPage() {
                       {/* 공급종류 */}
                       {complex.units.some((u) => u.supplyCountGeneral || u.supplyCountPriority) && (
                         <div className="border-t border-gray-100 overflow-x-auto">
-                          <p className="px-3 py-2 text-[11px] font-bold text-gray-500 bg-gray-50">공급종류</p>
-                          <table className="w-full text-xs">
+                          <p className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-50">공급종류</p>
+                          <table className="w-full text-sm">
                             <thead>
                               <tr className="bg-gray-50 border-b border-gray-200">
                                 <th className="px-3 py-2 text-left font-semibold text-gray-600">주택형</th>
@@ -261,8 +260,8 @@ export default function NoticeDetailPage() {
                       {/* 금액 정보 */}
                       {complex.units.some((u) => u.deposit) && (
                         <div className="border-t border-gray-100 overflow-x-auto">
-                          <p className="px-3 py-2 text-[11px] font-bold text-gray-500 bg-gray-50">금액 정보 (천원)</p>
-                          <table className="w-full text-xs">
+                          <p className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-50">금액 정보 (천원)</p>
+                          <table className="w-full text-sm">
                             <thead>
                               <tr className="bg-gray-50 border-b border-gray-200">
                                 <th className="px-3 py-2 text-left font-semibold text-gray-600">주택형</th>
@@ -290,8 +289,8 @@ export default function NoticeDetailPage() {
                       {/* 계약면적 */}
                       {complex.units.some((u) => u.contractArea) && (
                         <div className="border-t border-gray-100 overflow-x-auto">
-                          <p className="px-3 py-2 text-[11px] font-bold text-gray-500 bg-gray-50">세대당 계약면적 (m²)</p>
-                          <table className="w-full text-xs">
+                          <p className="px-3 py-2 text-xs font-bold text-gray-500 bg-gray-50">세대당 계약면적 (m²)</p>
+                          <table className="w-full text-sm">
                             <thead>
                               <tr className="bg-gray-50 border-b border-gray-200">
                                 <th className="px-3 py-2 text-left font-semibold text-gray-600">주택형</th>
@@ -344,7 +343,7 @@ export default function NoticeDetailPage() {
                 />
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-200">
                       <th className="px-3 py-2 text-left font-semibold text-gray-600">단지/형</th>
@@ -373,7 +372,7 @@ export default function NoticeDetailPage() {
                   </tbody>
                 </table>
               </div>
-              <p className="text-[10px] text-gray-400 mt-2">* 전환월세 = 보증금 × 전환율 ÷ 12 (실제 조건은 공고문 확인)</p>
+              <p className="text-xs text-gray-400 mt-2">* 전환월세 = 보증금 × 전환율 ÷ 12 (실제 조건은 공고문 확인)</p>
             </div>
           </Section>
         )}
@@ -381,7 +380,7 @@ export default function NoticeDetailPage() {
         {/* 공급일정 */}
         <Section title="📅 공급일정">
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <tbody>
                 <ScheduleRow label="접수기간" value={schedule.applicationPeriod || fmtRange(notice.applyStartDate, notice.applyEndDate)} />
                 {schedule.applicationPeriod1st && <ScheduleRow label="1순위 접수" value={schedule.applicationPeriod1st} />}
@@ -402,7 +401,7 @@ export default function NoticeDetailPage() {
           return (
             <Section title="📞 접수처 정보">
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-xs">
+                <table className="w-full text-sm">
                   <tbody>
                     {ci.phone && <ScheduleRow label="전화번호" value={ci.phone} />}
                     {ci.address && <ScheduleRow label="접수처 주소" value={ci.address} />}
@@ -416,7 +415,7 @@ export default function NoticeDetailPage() {
         {/* 기본 정보 */}
         <Section title="ℹ️ 기본정보">
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <table className="w-full text-xs">
+            <table className="w-full text-sm">
               <tbody>
                 {notice.address && <ScheduleRow label="위치" value={notice.address} />}
                 <ScheduleRow label="공고일" value={formatDate(notice.announceDate)} />
@@ -434,7 +433,7 @@ export default function NoticeDetailPage() {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="text-sm font-bold text-gray-800 mb-2">{title}</h3>
+      <h3 className="text-base font-bold text-gray-800 mb-3">{title}</h3>
       {children}
     </section>
   );
@@ -443,8 +442,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function ScheduleRow({ label, value }: { label: string; value: string }) {
   return (
     <tr className="border-b border-gray-50 last:border-0">
-      <td className="px-4 py-3 text-gray-500 font-medium whitespace-nowrap w-[100px] bg-gray-50">{label}</td>
-      <td className="px-4 py-3 text-gray-800">{value || "-"}</td>
+      <td className="px-4 py-3.5 text-sm text-gray-500 font-medium whitespace-nowrap w-[110px] bg-gray-50">{label}</td>
+      <td className="px-4 py-3.5 text-sm text-gray-800">{value || "-"}</td>
     </tr>
   );
 }
