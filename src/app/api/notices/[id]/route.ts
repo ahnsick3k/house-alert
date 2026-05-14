@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { fetchLHNoticeDetail } from "@/lib/api/lh";
-import { DUMMY_DETAIL } from "@/lib/dummy-data";
 import { ComplexInfo, UnitTypeInfo, ScheduleInfo } from "@/lib/types";
 
 export async function GET(
@@ -9,11 +8,6 @@ export async function GET(
 ) {
   const { id } = await params;
   const apiKey = process.env.DATA_GO_KR_API_KEY ?? "";
-
-  // 더미 데이터 매칭
-  if (id.startsWith("dummy-") && DUMMY_DETAIL[id]) {
-    return NextResponse.json(DUMMY_DETAIL[id]);
-  }
 
   if (!apiKey) {
     return NextResponse.json({ complexes: [], schedule: {}, message: "API key not configured" });

@@ -3,7 +3,6 @@ import { fetchLHNotices } from "@/lib/api/lh";
 import { fetchIHNotices } from "@/lib/api/ih";
 import { fetchMyHomeNotices } from "@/lib/api/myhome";
 import { fetchSHNotices } from "@/lib/api/sh";
-import { DUMMY_NOTICES } from "@/lib/dummy-data";
 import { Notice } from "@/lib/types";
 
 export const revalidate = 1800; // 30분 ISR
@@ -11,7 +10,7 @@ export const revalidate = 1800; // 30분 ISR
 export async function GET() {
   const apiKey = process.env.DATA_GO_KR_API_KEY ?? "";
 
-  const notices: Notice[] = [...DUMMY_NOTICES];
+  const notices: Notice[] = [];
   const errors: string[] = [];
 
   if (apiKey) {
@@ -31,7 +30,7 @@ export async function GET() {
       }
     });
   } else {
-    errors.push("API key not configured — showing dummy data only");
+    errors.push("API key not configured");
   }
 
   // 중복 제거 (제목 + 기관 기준)
