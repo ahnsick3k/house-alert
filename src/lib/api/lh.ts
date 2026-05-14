@@ -56,11 +56,11 @@ export async function fetchLHNotices(apiKey: string): Promise<Notice[]> {
   for (const [code, region] of Object.entries(regionMap)) {
     for (let page = 1; page <= MAX_PAGES; page++) {
       try {
-        const url = `${BASE}/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1?ServiceKey=${encodeURIComponent(apiKey)}&PG_SZ=${PAGE_SIZE}&PAGE=${page}&CNP_CD=${code}&type=json`;
+        const url = `${BASE}/lhLeaseNoticeInfo1/lhLeaseNoticeInfo1?ServiceKey=${encodeURIComponent(apiKey)}&PG_SZ=${PAGE_SIZE}&PAGE=${page}&CNP_CD=${code}&PAN_ST_DT=${YEAR}0101&type=json`;
         const res = await fetch(url, { next: { revalidate: 3600 } });
         const data = await res.json();
 
-        const items = data?.[1] ?? [];
+        const items = data?.[1]?.dsList ?? data?.[1] ?? [];
         if (!Array.isArray(items) || items.length === 0) break;
 
         for (const item of items) {
