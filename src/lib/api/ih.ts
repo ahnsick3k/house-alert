@@ -32,7 +32,7 @@ export async function fetchIHNotices(apiKey: string): Promise<Notice[]> {
 
       let status: Notice["status"] = "기타";
       if (item.noticeStatus?.includes("공고") || item.sttus?.includes("공고")) status = "공고중";
-      else if (item.noticeStatus?.includes("접수") || item.sttus?.includes("접수")) status = "접수중";
+      else if (item.noticeStatus?.includes("접수") || item.sttus?.includes("접수")) status = "신청중";
 
       notices.push({
         id: `ih-${item.noticeId ?? item.nttNo ?? notices.length}`,

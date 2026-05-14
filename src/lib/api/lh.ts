@@ -31,9 +31,13 @@ export async function fetchLHNotices(apiKey: string): Promise<Notice[]> {
 
         let status: Notice["status"] = "기타";
         const panSs = item.PAN_SS ?? "";
-        if (panSs.includes("공고")) status = "공고중";
-        else if (panSs.includes("접수")) status = "접수중";
+        if (panSs.includes("예정")) status = "공고예정";
+        else if (panSs.includes("접수") && !panSs.includes("마감")) status = "신청중";
+        else if (panSs.includes("심사")) status = "서류심사중";
+        else if (panSs.includes("당첨")) status = "당첨";
+        else if (panSs.includes("낙첨") || panSs.includes("미당첨")) status = "낙첨";
         else if (panSs.includes("마감")) status = "접수마감";
+        else if (panSs.includes("공고")) status = "공고중";
 
         notices.push({
           id: `lh-${item.PAN_ID ?? notices.length}`,
